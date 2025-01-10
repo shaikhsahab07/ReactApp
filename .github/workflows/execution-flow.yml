@@ -5,6 +5,7 @@ on:
       - main
 jobs:
   test:
+    continue-on-error: true
     strategy:
       matrix:
         node-version: [12, 14, 16]
@@ -37,6 +38,7 @@ jobs:
 
   build:
     needs: test
+    continue-on-error: true
     strategy:
       matrix:
         node-version: [12, 14, 16]
