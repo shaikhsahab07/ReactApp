@@ -1,0 +1,15 @@
+name: Download artifact reusable workflow
+on: workflow_call
+jobs:
+  download:
+    runs-on: ubuntu-latest
+    steps:
+        - name: download artifact
+          id: download-confirmation
+          uses: actions/download-artifact@v3
+          with:
+            name: test-report 
+        - name: verify download artifact step
+          if: ${{ failure() && steps.download-confirmation.outcome == 'failure' }}
+          run: echo "ERROR: Reusable workflow got failed"
+
