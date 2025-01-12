@@ -37,6 +37,9 @@ jobs:
           name: test-report
           path: test.json
 
+  download:
+       uses: ./.github/workflows/reusable-workflow.yaml         
+
   build:
     needs: test
     strategy:
@@ -48,10 +51,8 @@ jobs:
                   node-version: 18   
     runs-on: ${{ matrix.os }}
     steps:
-      - name: Get code
+      - name: checkout code
         uses: actions/checkout@v3
-      - name: Download test-report
-        uses: ./.github/workflows/reusable-workflow.yaml  
       - name: Cache dependencies
         id: cache
         uses: actions/cache@v3
@@ -72,4 +73,5 @@ jobs:
         with:
          name: dist-files
          path: dist
+      
 
