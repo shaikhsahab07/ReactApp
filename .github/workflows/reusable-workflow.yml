@@ -11,5 +11,5 @@ jobs:
             name: test-report 
         - name: verify download artifact step
           if: ${{ failure() && steps.download-confirmation.outcome == 'failure' }}
-          run: echo "ERROR: Reusable workflow got failed"
+          run: echo 'Error Reusable workflow got failed'
 
