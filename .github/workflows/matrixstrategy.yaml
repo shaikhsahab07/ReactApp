@@ -32,7 +32,6 @@ jobs:
         id: testconclusion
         run: npm run test
       - name: Upload test report
-        if: ${{ failure() && steps.testconclusion.outcome == 'failure' }}
         uses: actions/upload-artifact@v3
         with:
           name: test-report
