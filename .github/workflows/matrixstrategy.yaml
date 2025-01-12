@@ -38,6 +38,7 @@ jobs:
           path: test.json
 
   download:
+       needs: test
        uses: ./.github/workflows/reusable-workflow.yaml         
 
   build:
