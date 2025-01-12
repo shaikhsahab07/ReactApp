@@ -11,10 +11,7 @@ jobs:
             node-version: [14, 16]
             include:
               - os: ubuntu-latest
-                node-version: 18    
-            exclude:
-              - os: windows-latest
-                node-version: 16      
+                node-version: 18         
     runs-on: ${{ matrix.os }}
     steps:
       - name: Get code
@@ -49,10 +46,7 @@ jobs:
             node-version: [14, 16]
             include:
                 - os: ubuntu-latest
-                  node-version: 18
-            exclude:
-               - os: windows-latest
-                 node-version: 16       
+                  node-version: 18   
     runs-on: ${{ matrix.os }}
     steps:
       - name: Get code

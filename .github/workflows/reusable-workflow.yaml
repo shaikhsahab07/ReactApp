@@ -1,0 +1,15 @@
+name: Reusable workflow for download test report
+on: 
+  workflow_call:
+jobs:
+  download-artifact:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v3
+        id: download-testreport
+        with:
+         name: test-report
+      - name: Verify test report step 
+        if: ${{ success() && steps.download-testreport.outcome == 'success' }}   
+        run: echo "Artifact downloaded successfully using reusable workflow"
