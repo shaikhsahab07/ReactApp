@@ -40,6 +40,8 @@ jobs:
   download:
     needs: test
     uses: ./.github/workflows/reusable-workflow.yml
+    with:
+       name: test-report  
             
   build:
     needs: test
