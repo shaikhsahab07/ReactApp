@@ -1,11 +1,6 @@
 name: Download artifact reusable workflow
-on: 
- workflow_call:
-   inputs:
-     artifact-name:
-       description: This would be the name of artifact which we are uploading
-       type: string
-       required: true
+on: workflow_call
+
 jobs:
  download:
     runs-on: ubuntu-latest
