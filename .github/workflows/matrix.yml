@@ -41,7 +41,7 @@ jobs:
     needs: test
     uses: ./.github/workflows/reusable-workflow.yml
     with:
-      artifact-name: test-report
+     artifact-name: test-report
           
   build:
     needs: test
