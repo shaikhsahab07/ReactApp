@@ -4,8 +4,9 @@ on:
    inputs:
      artifact-name:
         description: This will be the name of artifact
+        required: true
         type: string
-        required: false
+        
 jobs:
  download:
     runs-on: ubuntu-latest
