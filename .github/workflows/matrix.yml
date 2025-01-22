@@ -7,11 +7,12 @@ jobs:
   test:
     strategy:
         matrix:
-            os: [self-hosted, Linux, X64, macrunner]
             node-version: [14, 16]  
     runs-on: 
       - self-hosted
-      - ${{ matrix.os }}
+      - Linux
+      - X64
+      - macrunner
     steps:
       - name: Get code
         uses: actions/checkout@v3
