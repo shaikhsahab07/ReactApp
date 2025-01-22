@@ -1,4 +1,3 @@
-# just a comment
 name: Workflow Control Pipeline
 on: 
   push:
@@ -8,12 +7,11 @@ jobs:
   test:
     strategy:
         matrix:
-            os: [ubuntu-latest, windows-latest]
-            node-version: [14, 16]
-            include:
-              - os: ubuntu-latest
-                node-version: 18   
-    runs-on: ${{ matrix.os }}
+            os: [self-hosted, Linux, X64, macrunner]
+            node-version: [14, 16]  
+    runs-on: 
+      - self-hosted
+      - ${{ matrix.os }}
     steps:
       - name: Get code
         uses: actions/checkout@v3
