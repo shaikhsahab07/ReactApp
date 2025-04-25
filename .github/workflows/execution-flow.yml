@@ -1,50 +1,84 @@
 name: Workflow Control Pipeline
-on: workflow_dispatch
+
+on:
+  push:
+    branches: 
+      - '**'
+      - '!main'
+
 jobs:
   test:
     runs-on: ubuntu-latest
     steps:
       - name: Get code
         uses: actions/checkout@v3
+
       - name: Cache dependencies
         id: cache
         uses: actions/cache@v3
         with:
           path: ~/.npm
           key: deps-node-modules-${{ hashFiles('**/package-lock.json') }}
+
       - name: Install dependencies
         run: npm ci
+
       - name: Test code
-        id: testconclusion
-        run: npm run test
-      - name: Upload test report
-        if: ${{ failure() && steps.testconclusion.outcome == 'failure' }}
-        uses: actions/upload-artifact@v3
-        with:
-          name: test-report
-          path: test.json
+        id: unit-tests
+        run: |
+          echo "Running tests..."
+          npm run test
+          echo "tests_failed=false" >> $GITHUB_OUTPUT
+        continue-on-error: true
 
-  
-  build:
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - name: Get code
-        uses: actions/checkout@v3
-      - name: Cache dependencies
-        id: cache
-        uses: actions/cache@v3
-        with:
-          path: ~/.npm
-          key: deps-node-modules-${{ hashFiles('**/package-lock.json') }}
-      - name: Install dependencies
-        run: npm ci
-      - name: Build website
-        id: build-website
-        run: npm run build
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v3
-        with:
-         name: dist-files
-         path: dist
+      - name: Check test result
+        id: check-tests
+        run: |
+          if [ ${{ steps.unit-tests.outcome }} == 'failure' ]; then
+            echo "tests_failed=true" >> $GITHUB_OUTPUT
+          else
+            echo "tests_failed=false" >> $GITHUB_OUTPUT
+          fi
 
+      - name: Notify Commit Owner of Test Failure
+        if: steps.check-tests.outputs.tests_failed == 'true'
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { repo, owner } = context.repo;
+            const commit = context.sha;
+            const commitUrl = `https://github.com/${owner}/${repo}/commit/${commit}`;
+            const actor = context.actor;
+
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: owner,
+              repo: repo,
+              body: `@${actor} The unit tests for your commit [${commit.substring(0, 7)}](${commitUrl}) have failed. Please check the [workflow run](${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}) for details.`
+            });
+
+      - name: Notify Reviewers on Success
+        if: steps.check-tests.outputs.tests_failed == 'false' && github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { repo, owner } = context.repo;
+            const prNumber = context.issue.number;
+
+            const reviewers = ['shaikhsahab07']; // Reviewer added
+
+            github.rest.issues.createComment({
+              issue_number: prNumber,
+              owner: owner,
+              repo: repo,
+              body: `All tests have passed! @${reviewers.join(' @')} please review this PR.`
+            });
+
+            github.rest.pulls.requestReviewers({
+              owner: owner,
+              repo: repo,
+              pull_number: prNumber,
+              reviewers: reviewers
+            });
