@@ -5,19 +5,15 @@ on:
     branches:
       - '**'
       - '!main'
-  pull_request_review:
-    types: [submitted]
 
 jobs:
-  test:
-    if: github.event_name == 'push' || github.event_name == 'pull_request'
+  test-and-create-pr:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
       - name: Cache dependencies
-        id: cache
         uses: actions/cache@v3
         with:
           path: ~/.npm
@@ -33,7 +29,7 @@ jobs:
           npm run test
         continue-on-error: true
 
-      - name: Check test outcome
+      - name: Set test result
         id: test-result
         run: |
           if [ "${{ steps.unit-tests.outcome }}" == "failure" ]; then
@@ -49,48 +45,63 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const { repo, owner } = context.repo;
-            const commit = context.sha;
+            const commitSha = context.sha;
             const actor = context.actor;
-            const commitUrl = `https://github.com/${owner}/${repo}/commit/${commit}`;
+            const commitUrl = `https://github.com/${owner}/${repo}/commit/${commitSha}`;
 
-            github.rest.issues.createComment({
-              issue_number: context.issue.number,
-              owner: owner,
-              repo: repo,
-              body: `@${actor} The unit tests for your commit [${commit.substring(0, 7)}](${commitUrl}) have failed. Please check the [workflow run](${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}) for details.`
+            await github.rest.repos.createCommitComment({
+              owner,
+              repo,
+              commit_sha: commitSha,
+              body: `@${actor} The unit tests for your commit [${commitSha.substring(0, 7)}](${commitUrl}) have failed. Please check the [workflow run](${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}) for details.`
             });
 
-      - name: Notify Reviewers on Success
-        if: steps.test-result.outputs.tests_failed == 'false' && github.event_name == 'push'
+      - name: Create PR to main and assign reviewers
+        if: steps.test-result.outputs.tests_failed == 'false'
         uses: actions/github-script@v6
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const { repo, owner } = context.repo;
-            const pr = await github.rest.pulls.list({
+            const branch = context.ref.replace('refs/heads/', '');
+            const reviewers = ['shaikhsahab07'];
+
+            // Check if a PR from this branch to main already exists
+            const prs = await github.rest.pulls.list({
               owner,
               repo,
               state: 'open',
-              head: `${owner}:${context.ref.replace('refs/heads/', '')}`
+              head: `${owner}:${branch}`,
+              base: 'main'
             });
 
-            if (pr.data.length > 0) {
-              const prNumber = pr.data[0].number;
-              const reviewers = ['shaikhsahab07'];
-
-              await github.rest.issues.createComment({
-                issue_number: prNumber,
+            if (prs.data.length === 0) {
+              // Create PR if not exists
+              const pr = await github.rest.pulls.create({
                 owner,
                 repo,
-                body: `✅ All tests have passed! @${reviewers.join(' @')}, please review this PR.`
+                title: `Auto PR: ${branch} → main`,
+                head: branch,
+                base: 'main',
+                body: 'This PR was automatically created after passing unit tests.'
               });
 
+              // Request reviewers
               await github.rest.pulls.requestReviewers({
                 owner,
                 repo,
-                pull_number: prNumber,
+                pull_number: pr.data.number,
                 reviewers
               });
+
+              // Optional comment to notify reviewers
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: pr.data.number,
+                body: `✅ All tests have passed! @${reviewers.join(' @')} please review this PR.`
+              });
+
             } else {
-              console.log('No open PR found for this branch.');
+              console.log("A pull request already exists for this branch.");
             }
