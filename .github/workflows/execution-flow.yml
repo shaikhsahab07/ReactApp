@@ -108,4 +108,3 @@ jobs:
             } else {
               console.log("A pull request already exists for this branch.");
             }
-###
