@@ -2,15 +2,18 @@ name: Workflow Control Pipeline
 
 on:
   push:
-    branches: 
+    branches:
       - '**'
       - '!main'
+  pull_request_review:
+    types: [submitted]
 
 jobs:
   test:
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - name: Get code
+      - name: Checkout code
         uses: actions/checkout@v3
 
       - name: Cache dependencies
@@ -23,33 +26,32 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Test code
+      - name: Run unit tests
         id: unit-tests
         run: |
-          echo "Running tests..."
+          echo "Running unit tests..."
           npm run test
-          echo "tests_failed=false" >> $GITHUB_OUTPUT
         continue-on-error: true
 
-      - name: Check test result
-        id: check-tests
+      - name: Check test outcome
+        id: test-result
         run: |
-          if [ ${{ steps.unit-tests.outcome }} == 'failure' ]; then
+          if [ "${{ steps.unit-tests.outcome }}" == "failure" ]; then
             echo "tests_failed=true" >> $GITHUB_OUTPUT
           else
             echo "tests_failed=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Notify Commit Owner of Test Failure
-        if: steps.check-tests.outputs.tests_failed == 'true'
+      - name: Notify Commit Owner on Failure
+        if: steps.test-result.outputs.tests_failed == 'true'
         uses: actions/github-script@v6
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const { repo, owner } = context.repo;
             const commit = context.sha;
-            const commitUrl = `https://github.com/${owner}/${repo}/commit/${commit}`;
             const actor = context.actor;
+            const commitUrl = `https://github.com/${owner}/${repo}/commit/${commit}`;
 
             github.rest.issues.createComment({
               issue_number: context.issue.number,
@@ -59,26 +61,36 @@ jobs:
             });
 
       - name: Notify Reviewers on Success
-        if: steps.check-tests.outputs.tests_failed == 'false' && github.event_name == 'pull_request'
+        if: steps.test-result.outputs.tests_failed == 'false' && github.event_name == 'push'
         uses: actions/github-script@v6
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const { repo, owner } = context.repo;
-            const prNumber = context.issue.number;
-
-            const reviewers = ['shaikhsahab07']; // Reviewer added
-
-            github.rest.issues.createComment({
-              issue_number: prNumber,
-              owner: owner,
-              repo: repo,
-              body: `All tests have passed! @${reviewers.join(' @')} please review this PR.`
+            const pr = await github.rest.pulls.list({
+              owner,
+              repo,
+              state: 'open',
+              head: `${owner}:${context.ref.replace('refs/heads/', '')}`
             });
 
-            github.rest.pulls.requestReviewers({
-              owner: owner,
-              repo: repo,
-              pull_number: prNumber,
-              reviewers: reviewers
-            });
+            if (pr.data.length > 0) {
+              const prNumber = pr.data[0].number;
+              const reviewers = ['shaikhsahab07'];
+
+              await github.rest.issues.createComment({
+                issue_number: prNumber,
+                owner,
+                repo,
+                body: `✅ All tests have passed! @${reviewers.join(' @')}, please review this PR.`
+              });
+
+              await github.rest.pulls.requestReviewers({
+                owner,
+                repo,
+                pull_number: prNumber,
+                reviewers
+              });
+            } else {
+              console.log('No open PR found for this branch.');
+            }
