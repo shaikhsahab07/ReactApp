@@ -1,50 +1,111 @@
 name: Workflow Control Pipeline
-on: workflow_dispatch
+
+on:
+  push:
+    branches:
+      - '**'
+      - '!main'
+
+permissions:
+  contents: write
+  pull-requests: write      
+
 jobs:
-  test:
+  test-and-create-pr:
     runs-on: ubuntu-latest
     steps:
-      - name: Get code
+      - name: Checkout code
         uses: actions/checkout@v3
+
       - name: Cache dependencies
-        id: cache
         uses: actions/cache@v3
         with:
           path: ~/.npm
           key: deps-node-modules-${{ hashFiles('**/package-lock.json') }}
+
       - name: Install dependencies
         run: npm ci
-      - name: Test code
-        id: testconclusion
-        run: npm run test
-      - name: Upload test report
-        if: ${{ failure() && steps.testconclusion.outcome == 'failure' }}
-        uses: actions/upload-artifact@v3
-        with:
-          name: test-report
-          path: test.json
 
-  
-  build:
-    needs: test
-    runs-on: ubuntu-latest
-    steps:
-      - name: Get code
-        uses: actions/checkout@v3
-      - name: Cache dependencies
-        id: cache
-        uses: actions/cache@v3
-        with:
-          path: ~/.npm
-          key: deps-node-modules-${{ hashFiles('**/package-lock.json') }}
-      - name: Install dependencies
-        run: npm ci
-      - name: Build website
-        id: build-website
-        run: npm run build
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v3
-        with:
-         name: dist-files
-         path: dist
+      - name: Run unit tests
+        id: unit-tests
+        run: |
+          echo "Running unit tests..."
+          npm run test
+        continue-on-error: true
 
+      - name: Set test result
+        id: test-result
+        run: |
+          if [ "${{ steps.unit-tests.outcome }}" == "failure" ]; then
+            echo "tests_failed=true" >> $GITHUB_OUTPUT
+          else
+            echo "tests_failed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Notify Commit Owner on Failure
+        if: steps.test-result.outputs.tests_failed == 'true'
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { repo, owner } = context.repo;
+            const commitSha = context.sha;
+            const actor = context.actor;
+            const commitUrl = `https://github.com/${owner}/${repo}/commit/${commitSha}`;
+
+            await github.rest.repos.createCommitComment({
+              owner,
+              repo,
+              commit_sha: commitSha,
+              body: `@${actor} The unit tests for your commit [${commitSha.substring(0, 7)}](${commitUrl}) have failed. Please check the [workflow run](${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}) for details.`
+            });
+
+      - name: Create PR to main and assign reviewers
+        if: steps.test-result.outputs.tests_failed == 'false'
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { repo, owner } = context.repo;
+            const branch = context.ref.replace('refs/heads/', '');
+            const reviewers = ['shaikhsahab07'];
+
+            // Check if a PR from this branch to main already exists
+            const prs = await github.rest.pulls.list({
+              owner,
+              repo,
+              state: 'open',
+              head: `${owner}:${branch}`,
+              base: 'main'
+            });
+
+            if (prs.data.length === 0) {
+              // Create PR if not exists
+              const pr = await github.rest.pulls.create({
+                owner,
+                repo,
+                title: `Auto PR: ${branch} → main`,
+                head: branch,
+                base: 'main',
+                body: 'This PR was automatically created after passing unit tests.'
+              });
+
+              // Request reviewers
+              await github.rest.pulls.requestReviewers({
+                owner,
+                repo,
+                pull_number: pr.data.number,
+                reviewers
+              });
+
+              // Optional comment to notify reviewers
+              await github.rest.issues.createComment({
+                owner,
+                repo,
+                issue_number: pr.data.number,
+                body: `✅ All tests have passed! @${reviewers.join(' @')} please review this PR.`
+              });
+
+            } else {
+              console.log("A pull request already exists for this branch.");
+            }
