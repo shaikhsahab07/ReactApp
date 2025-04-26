@@ -11,7 +11,7 @@ describe('MainContent', () => {
   it('should render a button', () => {
     render(<MainContent />);
 
-    expect(screen.getByRole('but')).toBeInTheDocument();
+    expect(screen.getByRole('butt')).toBeInTheDocument();
   });
 
   it('should show the help area after clicking the button', async () => {
