@@ -57,7 +57,7 @@ jobs:
               owner,
               repo,
               commit_sha: commitSha,
-              body: `@${actor} The unit tests for your commit [${commitSha.substring(0, 7)}](${commitUrl}) have failed. Please check the [workflow run](${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}) for details.`
+              body: `@${actor} The unit tests for your commit [${commitSha.substring(0, 7)}](${commitUrl}) have failed.`
             });
 
       - name: Create PR to main and assign reviewers
